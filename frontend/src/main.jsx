@@ -65,7 +65,6 @@ function App() {
       <main className="auth-page">
         <section className="auth-box">
           <h1>Inventory Management System</h1>
-          <p className="muted">Local network ready. No CDN links are used.</p>
           {view === 'register' ? (
             <Register api={api} onDone={() => setView('login')} flash={flash} />
           ) : (
@@ -89,7 +88,7 @@ function App() {
           <span>{user.email}</span>
           <small>{labelRole(user.role)}</small>
         </div>
-        {['dashboard', 'profile', 'transfers'].map((item) => (
+        {['dashboard', 'transfers', 'profile'].map((item) => (
           <button key={item} className={view === item ? 'active' : ''} onClick={() => setView(item)}>
             {title(item)}
           </button>
@@ -112,7 +111,7 @@ function App() {
 }
 
 function Login({ api, onLogin, flash }) {
-  const [form, setForm] = useState({ email: 'admin@example.com', password: 'Admin@123' });
+  const [form, setForm] = useState({ email: '', password: '' });
   return (
     <form className="form-grid" onSubmit={async (event) => {
       event.preventDefault();
@@ -158,6 +157,24 @@ function Dashboard({ api, user, flash }) {
   const [form, setForm] = useState(blank);
   const [editing, setEditing] = useState(null);
   const [transfer, setTransfer] = useState({ inventory_id: '', to_user_id: '', note: '' });
+  const [search, setSearch] = useState('');
+  const [nomenclatureSort, setNomenclatureSort] = useState('none');
+
+  const visibleInventories = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    const filtered = inventories.filter((item) => {
+      if (!term) return true;
+      return [item.ledger_page_no, item.nomenclature, item.quantity_au, item.owner_name]
+        .some((value) => String(value ?? '').toLowerCase().includes(term));
+    });
+
+    if (nomenclatureSort === 'none') return filtered;
+
+    return [...filtered].sort((a, b) => {
+      const result = a.nomenclature.localeCompare(b.nomenclature, undefined, { sensitivity: 'base' });
+      return nomenclatureSort === 'asc' ? result : -result;
+    });
+  }, [inventories, search, nomenclatureSort]);
 
   async function load() {
     const [inventoryData, userData] = await Promise.all([api('inventories'), api('users')]);
@@ -196,6 +213,84 @@ function Dashboard({ api, user, flash }) {
     }
   }
 
+  function toggleNomenclatureSort() {
+    setNomenclatureSort((current) => {
+      if (current === 'none') return 'asc';
+      if (current === 'asc') return 'desc';
+      return 'none';
+    });
+  }
+
+  function printInventory() {
+    const rows = visibleInventories.map((item, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(item.ledger_page_no)}</td>
+        <td>${escapeHtml(item.nomenclature)}</td>
+        <td>${escapeHtml(item.quantity_au)}</td>
+        <td>${escapeHtml(item.owner_name)}</td>
+      </tr>
+    `).join('');
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      flash('Popup blocked. Allow popups to print inventory.');
+      return;
+    }
+    printWindow.document.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>Inventory List</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #111827; }
+            h1 { font-size: 22px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; }
+            th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <h1>Inventory List</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Sl. No.</th>
+                <th>Ledger No./Page No.</th>
+                <th>Nomenclature</th>
+                <th>Quantity/AU in no.</th>
+                <th>Owner</th>
+              </tr>
+            </thead>
+            <tbody>${rows || '<tr><td colspan="5">No inventory found</td></tr>'}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }
+
+  function exportInventoryCsv() {
+    const rows = visibleInventories.map((item, index) => [
+      index + 1,
+      item.ledger_page_no,
+      item.nomenclature,
+      item.quantity_au,
+      item.owner_name,
+    ]);
+    const csv = [
+      ['Sl. No.', 'Ledger No./Page No.', 'Nomenclature', 'Quantity/AU in no.', 'Owner'],
+      ...rows,
+    ].map((row) => row.map(csvCell).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'inventory-list.csv';
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }
+
   return (
     <>
       <Header title="Inventory Register" subtitle="Add, view, and modify the four required inventory columns." />
@@ -231,20 +326,30 @@ function Dashboard({ api, user, flash }) {
         </form>
       </section>
 
+      <div className="toolbar">
+        <label className="search-box">Search Inventory
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search ledger, nomenclature, quantity, owner" />
+        </label>
+        <div className="toolbar-actions">
+          <button type="button" onClick={printInventory}>Print Inventory</button>
+          <button type="button" onClick={exportInventoryCsv}>Export CSV</button>
+        </div>
+      </div>
+
       <div className="table-wrap">
         <table>
           <thead>
             <tr>
               <th>Sl. No.</th>
               <th>Ledger No./Page No.</th>
-              <th>Nomenclature</th>
+              <th><button type="button" className="sort-header" onClick={toggleNomenclatureSort}>Nomenclature {sortMark(nomenclatureSort)}</button></th>
               <th>Quantity/AU in no.</th>
               <th>Owner</th>
               <th>Modify</th>
             </tr>
           </thead>
           <tbody>
-            {inventories.map((item, index) => (
+            {visibleInventories.map((item, index) => (
               <tr key={item.id}>
                 <td>{index + 1}</td>
                 <td>{item.ledger_page_no}</td>
@@ -342,6 +447,8 @@ function Transfers({ api, user, flash }) {
               <th>Inventory</th>
               <th>From</th>
               <th>To</th>
+              <th>Request Sent Time</th>
+              <th>Request Approved Time</th>
               <th>Status</th>
               <th>Note</th>
               <th>Action</th>
@@ -353,6 +460,8 @@ function Transfers({ api, user, flash }) {
                 <td>{request.nomenclature}</td>
                 <td>{request.from_user_name}</td>
                 <td>{request.to_user_name}</td>
+                <td>{formatDateTime(request.created_at)}</td>
+                <td>{formatDateTime(request.decided_at)}</td>
                 <td><span className={`status ${request.status}`}>{request.status}</span></td>
                 <td>{request.note}</td>
                 <td>
@@ -438,6 +547,30 @@ function title(value) {
 
 function labelRole(value) {
   return value.replace('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function sortMark(value) {
+  if (value === 'asc') return 'A-Z';
+  if (value === 'desc') return 'Z-A';
+  return 'Sort';
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  return new Date(value.replace(' ', 'T')).toLocaleString();
+}
+
+function csvCell(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 createRoot(document.getElementById('root')).render(<App />);
