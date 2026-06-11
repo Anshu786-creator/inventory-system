@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS inventories (
   id INT AUTO_INCREMENT PRIMARY KEY,
   ledger_page_no VARCHAR(80) NOT NULL,
   nomenclature VARCHAR(255) NOT NULL,
-  quantity_au INT NOT NULL DEFAULT 0,
+  quantity_au VARCHAR(80) NOT NULL DEFAULT '0 no.',
   owner_user_id INT NOT NULL,
   created_by INT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
