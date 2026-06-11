@@ -35,6 +35,32 @@ function validate_password(string $password): void
     }
 }
 
+function normalize_quantity_unit(array $data): string
+{
+    $quantity = trim((string) ($data['quantity_au'] ?? ''));
+    $unit = trim((string) ($data['unit'] ?? ''));
+    $allowedUnits = ['kg', 'no.', 'dozen'];
+
+    if ($quantity === '') {
+        respond(['error' => 'quantity_au is required'], 422);
+    }
+
+    if ($unit === '') {
+        foreach ($allowedUnits as $candidate) {
+            if (preg_match('/\s' . preg_quote($candidate, '/') . '$/', $quantity)) {
+                return $quantity;
+            }
+        }
+        $unit = 'no.';
+    }
+
+    if (!in_array($unit, $allowedUnits, true)) {
+        respond(['error' => 'Invalid unit'], 422);
+    }
+
+    return $quantity . ' ' . $unit;
+}
+
 function auth(PDO $pdo): array
 {
     if (empty($_SESSION['user_id'])) {
@@ -177,7 +203,7 @@ try {
         $stmt->execute([
             trim($data['ledger_page_no']),
             trim($data['nomenclature']),
-            max(0, (int) $data['quantity_au']),
+            normalize_quantity_unit($data),
             $user['id'],
             $user['id'],
         ]);
@@ -191,7 +217,7 @@ try {
         $stmt->execute([
             trim($data['ledger_page_no']),
             trim($data['nomenclature']),
-            max(0, (int) $data['quantity_au']),
+            normalize_quantity_unit($data),
             (int) $data['id'],
         ]);
         respond(['message' => 'Inventory updated']);
