@@ -234,8 +234,8 @@ try {
         }
 
         $stmt = $pdo->prepare(
-            'INSERT INTO transfer_requests (inventory_id, from_user_id, to_user_id, requested_by, note)
-             VALUES (?, ?, ?, ?, ?)'
+            'INSERT INTO transfer_requests (inventory_id, from_user_id, to_user_id, requested_by, note, created_at)
+             VALUES (?, ?, ?, ?, ?, NOW())'
         );
         $stmt->execute([
             (int) $data['inventory_id'],
