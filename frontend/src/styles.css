@@ -67,6 +67,12 @@ button:hover {
   gap: 14px;
 }
 
+.quantity-row {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 12px;
+}
+
 label {
   display: grid;
   gap: 6px;
@@ -285,6 +291,10 @@ th {
   }
 
   .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .quantity-row {
     grid-template-columns: 1fr;
   }
 

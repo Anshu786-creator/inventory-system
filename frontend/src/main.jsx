@@ -151,7 +151,7 @@ function Register({ api, onDone, flash }) {
 }
 
 function Dashboard({ api, user, flash }) {
-  const blank = { ledger_page_no: '', nomenclature: '', quantity_au: '' };
+  const blank = { ledger_page_no: '', nomenclature: '', quantity_au: '', unit: 'no.' };
   const [inventories, setInventories] = useState([]);
   const [users, setUsers] = useState([]);
   const [form, setForm] = useState(blank);
@@ -257,7 +257,7 @@ function Dashboard({ api, user, flash }) {
                 <th>Sl. No.</th>
                 <th>Ledger No./Page No.</th>
                 <th>Nomenclature</th>
-                <th>Quantity/AU in no.</th>
+                <th>Quantity/AU</th>
                 <th>Owner</th>
               </tr>
             </thead>
@@ -280,7 +280,7 @@ function Dashboard({ api, user, flash }) {
       item.owner_name,
     ]);
     const csv = [
-      ['Sl. No.', 'Ledger No./Page No.', 'Nomenclature', 'Quantity/AU in no.', 'Owner'],
+      ['Sl. No.', 'Ledger No./Page No.', 'Nomenclature', 'Quantity/AU', 'Owner'],
       ...rows,
     ].map((row) => row.map(csvCell).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -299,7 +299,16 @@ function Dashboard({ api, user, flash }) {
           <h3>{editing ? 'Modify Inventory' : 'Add Inventory'}</h3>
           <label>Ledger No./Page No.<input value={form.ledger_page_no} onChange={(e) => setForm({ ...form, ledger_page_no: e.target.value })} /></label>
           <label>Nomenclature<input value={form.nomenclature} onChange={(e) => setForm({ ...form, nomenclature: e.target.value })} /></label>
-          <label>Quantity/AU in no.<input type="number" min="0" value={form.quantity_au} onChange={(e) => setForm({ ...form, quantity_au: e.target.value })} /></label>
+          <div className="quantity-row">
+            <label>Quantity/AU<input type="number" min="0" value={form.quantity_au} onChange={(e) => setForm({ ...form, quantity_au: e.target.value })} /></label>
+            <label>Unit
+              <select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
+                <option value="kg">kg</option>
+                <option value="no.">no.</option>
+                <option value="dozen">dozen</option>
+              </select>
+            </label>
+          </div>
           <button type="submit">{editing ? 'Update' : 'Save'}</button>
         </form>
 
@@ -343,7 +352,7 @@ function Dashboard({ api, user, flash }) {
               <th>Sl. No.</th>
               <th>Ledger No./Page No.</th>
               <th><button type="button" className="sort-header" onClick={toggleNomenclatureSort}>Nomenclature {sortMark(nomenclatureSort)}</button></th>
-              <th>Quantity/AU in no.</th>
+              <th>Quantity/AU</th>
               <th>Owner</th>
               <th>Modify</th>
             </tr>
@@ -361,7 +370,7 @@ function Dashboard({ api, user, flash }) {
                   setForm({
                     ledger_page_no: item.ledger_page_no,
                     nomenclature: item.nomenclature,
-                    quantity_au: item.quantity_au,
+                    ...splitQuantityUnit(item.quantity_au),
                   });
                 }}>Modify</button></td>
               </tr>
@@ -571,6 +580,13 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function splitQuantityUnit(value) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/^(.*)\s(kg|no\.|dozen)$/);
+  if (!match) return { quantity_au: text, unit: 'no.' };
+  return { quantity_au: match[1], unit: match[2] };
 }
 
 createRoot(document.getElementById('root')).render(<App />);
