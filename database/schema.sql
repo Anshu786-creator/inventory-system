@@ -7,11 +7,49 @@ USE inventory_system;
 CREATE TABLE IF NOT EXISTS users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(120) NOT NULL,
+  gender ENUM('male', 'female', 'other') NULL,
+  cadre_id INT NULL,
+  designation_id INT NULL,
+  group_id INT NULL,
   email VARCHAR(180) NOT NULL UNIQUE,
+  mobile_no VARCHAR(20) NULL,
+  telephone_no VARCHAR(20) NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('user', 'inventory_head', 'admin') NOT NULL DEFAULT 'user',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cadres (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL UNIQUE,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS designations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cadre_id INT NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_designation_per_cadre (cadre_id, name),
+  CONSTRAINT fk_designation_cadre FOREIGN KEY (cadre_id) REFERENCES cadres(id)
+);
+
+CREATE TABLE IF NOT EXISTS groups_master (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  cadre_id INT NOT NULL,
+  designation_id INT NOT NULL,
+  name VARCHAR(120) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY unique_group_link (cadre_id, designation_id, name),
+  CONSTRAINT fk_group_cadre FOREIGN KEY (cadre_id) REFERENCES cadres(id),
+  CONSTRAINT fk_group_designation FOREIGN KEY (designation_id) REFERENCES designations(id)
 );
 
 CREATE TABLE IF NOT EXISTS inventories (
