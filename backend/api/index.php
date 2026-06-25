@@ -61,13 +61,75 @@ function normalize_quantity_unit(array $data): string
     return $quantity . ' ' . $unit;
 }
 
+function user_payload(array $user): array
+{
+    return [
+        'id' => $user['id'],
+        'name' => $user['name'],
+        'gender' => $user['gender'] ?? '',
+        'cadre_id' => $user['cadre_id'] ?? '',
+        'designation_id' => $user['designation_id'] ?? '',
+        'group_id' => $user['group_id'] ?? '',
+        'email' => $user['email'],
+        'mobile_no' => $user['mobile_no'] ?? '',
+        'telephone_no' => $user['telephone_no'] ?? '',
+        'role' => $user['role'],
+    ];
+}
+
+function validate_master_link(PDO $pdo, array $data): void
+{
+    require_fields($data, ['cadre_id', 'designation_id', 'group_id']);
+
+    $stmt = $pdo->prepare(
+        'SELECT gm.id
+         FROM groups_master gm
+         JOIN designations d ON d.id = gm.designation_id
+         WHERE gm.id = ? AND gm.cadre_id = ? AND gm.designation_id = ? AND d.cadre_id = ?'
+    );
+    $stmt->execute([
+        (int) $data['group_id'],
+        (int) $data['cadre_id'],
+        (int) $data['designation_id'],
+        (int) $data['cadre_id'],
+    ]);
+
+    if (!$stmt->fetch()) {
+        respond(['error' => 'Selected cadre, designation, and group are not linked.'], 422);
+    }
+}
+
+function master_data(PDO $pdo): array
+{
+    return [
+        'cadres' => $pdo->query('SELECT id, name, is_active FROM cadres ORDER BY name')->fetchAll(),
+        'designations' => $pdo->query(
+            'SELECT d.id, d.name, d.cadre_id, c.name AS cadre_name, d.is_active
+             FROM designations d
+             JOIN cadres c ON c.id = d.cadre_id
+             ORDER BY c.name, d.name'
+        )->fetchAll(),
+        'groups' => $pdo->query(
+            'SELECT gm.id, gm.name, gm.cadre_id, gm.designation_id,
+                    c.name AS cadre_name, d.name AS designation_name, gm.is_active
+             FROM groups_master gm
+             JOIN cadres c ON c.id = gm.cadre_id
+             JOIN designations d ON d.id = gm.designation_id
+             ORDER BY c.name, d.name, gm.name'
+        )->fetchAll(),
+    ];
+}
+
 function auth(PDO $pdo): array
 {
     if (empty($_SESSION['user_id'])) {
         respond(['error' => 'Authentication required'], 401);
     }
 
-    $stmt = $pdo->prepare('SELECT id, name, email, role FROM users WHERE id = ?');
+    $stmt = $pdo->prepare(
+        'SELECT id, name, gender, cadre_id, designation_id, group_id, email, mobile_no, telephone_no, role
+         FROM users WHERE id = ?'
+    );
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
 
@@ -89,15 +151,33 @@ $action = $_GET['action'] ?? '';
 $method = $_SERVER['REQUEST_METHOD'];
 
 try {
+    if ($action === 'masters' && $method === 'GET') {
+        respond(master_data($pdo));
+    }
+
     if ($action === 'register' && $method === 'POST') {
         $data = input();
-        require_fields($data, ['name', 'email', 'password']);
+        require_fields($data, ['name', 'gender', 'email', 'mobile_no', 'password']);
+        if (!in_array($data['gender'], ['male', 'female', 'other'], true)) {
+            respond(['error' => 'Invalid gender'], 422);
+        }
+        validate_master_link($pdo, $data);
         validate_password($data['password']);
 
-        $stmt = $pdo->prepare('INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)');
+        $stmt = $pdo->prepare(
+            'INSERT INTO users
+             (name, gender, cadre_id, designation_id, group_id, email, mobile_no, telephone_no, password_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        );
         $stmt->execute([
             trim($data['name']),
+            $data['gender'],
+            (int) $data['cadre_id'],
+            (int) $data['designation_id'],
+            (int) $data['group_id'],
             strtolower(trim($data['email'])),
+            trim($data['mobile_no']),
+            trim($data['telephone_no'] ?? ''),
             password_hash($data['password'], PASSWORD_DEFAULT),
         ]);
 
@@ -120,14 +200,14 @@ try {
         $_SESSION['user_id'] = (int) $user['id'];
 
         respond([
-            'user' => ['id' => $user['id'], 'name' => $user['name'], 'email' => $user['email'], 'role' => $user['role']],
+            'user' => user_payload($user),
         ]);
     }
 
     $user = auth($pdo);
 
     if ($action === 'me' && $method === 'GET') {
-        respond(['user' => $user]);
+        respond(['user' => user_payload($user)]);
     }
 
     if ($action === 'logout' && $method === 'POST') {
@@ -142,9 +222,28 @@ try {
 
     if ($action === 'profile' && $method === 'PUT') {
         $data = input();
-        require_fields($data, ['name', 'email']);
-        $stmt = $pdo->prepare('UPDATE users SET name = ?, email = ? WHERE id = ?');
-        $stmt->execute([trim($data['name']), strtolower(trim($data['email'])), $user['id']]);
+        require_fields($data, ['name', 'gender', 'email', 'mobile_no']);
+        if (!in_array($data['gender'], ['male', 'female', 'other'], true)) {
+            respond(['error' => 'Invalid gender'], 422);
+        }
+        validate_master_link($pdo, $data);
+        $stmt = $pdo->prepare(
+            'UPDATE users
+             SET name = ?, gender = ?, cadre_id = ?, designation_id = ?, group_id = ?,
+                 email = ?, mobile_no = ?, telephone_no = ?
+             WHERE id = ?'
+        );
+        $stmt->execute([
+            trim($data['name']),
+            $data['gender'],
+            (int) $data['cadre_id'],
+            (int) $data['designation_id'],
+            (int) $data['group_id'],
+            strtolower(trim($data['email'])),
+            trim($data['mobile_no']),
+            trim($data['telephone_no'] ?? ''),
+            $user['id'],
+        ]);
         respond(['message' => 'Profile updated']);
     }
 
@@ -166,7 +265,17 @@ try {
     }
 
     if ($action === 'users' && $method === 'GET') {
-        $stmt = $pdo->query('SELECT id, name, email, role FROM users ORDER BY name');
+        $stmt = $pdo->query(
+            'SELECT u.id, u.name, u.gender, u.cadre_id, c.name AS cadre_name,
+                    u.designation_id, d.name AS designation_name,
+                    u.group_id, gm.name AS group_name,
+                    u.email, u.mobile_no, u.telephone_no, u.role
+             FROM users u
+             LEFT JOIN cadres c ON c.id = u.cadre_id
+             LEFT JOIN designations d ON d.id = u.designation_id
+             LEFT JOIN groups_master gm ON gm.id = u.group_id
+             ORDER BY u.name'
+        );
         respond(['users' => $stmt->fetchAll()]);
     }
 
@@ -179,6 +288,58 @@ try {
         }
         $pdo->prepare('UPDATE users SET role = ? WHERE id = ?')->execute([$data['role'], (int) $data['user_id']]);
         respond(['message' => 'Role updated']);
+    }
+
+    if ($action === 'cadre' && in_array($method, ['POST', 'PUT'], true)) {
+        require_role($user, ['admin']);
+        $data = input();
+        require_fields($data, ['name']);
+        if ($method === 'POST') {
+            $stmt = $pdo->prepare('INSERT INTO cadres (name, is_active) VALUES (?, ?)');
+            $stmt->execute([trim($data['name']), (int) ($data['is_active'] ?? 1)]);
+            respond(['message' => 'Cadre added'], 201);
+        }
+        require_fields($data, ['id']);
+        $stmt = $pdo->prepare('UPDATE cadres SET name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([trim($data['name']), (int) ($data['is_active'] ?? 1), (int) $data['id']]);
+        respond(['message' => 'Cadre updated']);
+    }
+
+    if ($action === 'designation' && in_array($method, ['POST', 'PUT'], true)) {
+        require_role($user, ['admin']);
+        $data = input();
+        require_fields($data, ['cadre_id', 'name']);
+        if ($method === 'POST') {
+            $stmt = $pdo->prepare('INSERT INTO designations (cadre_id, name, is_active) VALUES (?, ?, ?)');
+            $stmt->execute([(int) $data['cadre_id'], trim($data['name']), (int) ($data['is_active'] ?? 1)]);
+            respond(['message' => 'Designation added'], 201);
+        }
+        require_fields($data, ['id']);
+        $stmt = $pdo->prepare('UPDATE designations SET cadre_id = ?, name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([(int) $data['cadre_id'], trim($data['name']), (int) ($data['is_active'] ?? 1), (int) $data['id']]);
+        respond(['message' => 'Designation updated']);
+    }
+
+    if ($action === 'group' && in_array($method, ['POST', 'PUT'], true)) {
+        require_role($user, ['admin']);
+        $data = input();
+        require_fields($data, ['cadre_id', 'designation_id', 'name']);
+
+        $stmt = $pdo->prepare('SELECT id FROM designations WHERE id = ? AND cadre_id = ?');
+        $stmt->execute([(int) $data['designation_id'], (int) $data['cadre_id']]);
+        if (!$stmt->fetch()) {
+            respond(['error' => 'Designation does not belong to selected cadre'], 422);
+        }
+
+        if ($method === 'POST') {
+            $stmt = $pdo->prepare('INSERT INTO groups_master (cadre_id, designation_id, name, is_active) VALUES (?, ?, ?, ?)');
+            $stmt->execute([(int) $data['cadre_id'], (int) $data['designation_id'], trim($data['name']), (int) ($data['is_active'] ?? 1)]);
+            respond(['message' => 'Group added'], 201);
+        }
+        require_fields($data, ['id']);
+        $stmt = $pdo->prepare('UPDATE groups_master SET cadre_id = ?, designation_id = ?, name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([(int) $data['cadre_id'], (int) $data['designation_id'], trim($data['name']), (int) ($data['is_active'] ?? 1), (int) $data['id']]);
+        respond(['message' => 'Group updated']);
     }
 
     if ($action === 'inventories' && $method === 'GET') {
