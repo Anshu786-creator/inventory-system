@@ -41,15 +41,10 @@ CREATE TABLE IF NOT EXISTS designations (
 
 CREATE TABLE IF NOT EXISTS groups_master (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  cadre_id INT NOT NULL,
-  designation_id INT NOT NULL,
   name VARCHAR(120) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY unique_group_link (cadre_id, designation_id, name),
-  CONSTRAINT fk_group_cadre FOREIGN KEY (cadre_id) REFERENCES cadres(id),
-  CONSTRAINT fk_group_designation FOREIGN KEY (designation_id) REFERENCES designations(id)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS inventories (
