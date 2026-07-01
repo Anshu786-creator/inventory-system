@@ -82,20 +82,24 @@ function validate_master_link(PDO $pdo, array $data): void
     require_fields($data, ['cadre_id', 'designation_id', 'group_id']);
 
     $stmt = $pdo->prepare(
-        'SELECT gm.id
-         FROM groups_master gm
-         JOIN designations d ON d.id = gm.designation_id
-         WHERE gm.id = ? AND gm.cadre_id = ? AND gm.designation_id = ? AND d.cadre_id = ?'
+        'SELECT d.id
+         FROM designations d
+         JOIN cadres c ON c.id = d.cadre_id
+         WHERE d.id = ? AND d.cadre_id = ?'
     );
     $stmt->execute([
-        (int) $data['group_id'],
-        (int) $data['cadre_id'],
         (int) $data['designation_id'],
         (int) $data['cadre_id'],
     ]);
 
     if (!$stmt->fetch()) {
-        respond(['error' => 'Selected cadre, designation, and group are not linked.'], 422);
+        respond(['error' => 'Selected designation does not belong to selected cadre.'], 422);
+    }
+
+    $stmt = $pdo->prepare('SELECT id FROM groups_master WHERE id = ?');
+    $stmt->execute([(int) $data['group_id']]);
+    if (!$stmt->fetch()) {
+        respond(['error' => 'Selected group does not exist.'], 422);
     }
 }
 
@@ -110,12 +114,9 @@ function master_data(PDO $pdo): array
              ORDER BY c.name, d.name'
         )->fetchAll(),
         'groups' => $pdo->query(
-            'SELECT gm.id, gm.name, gm.cadre_id, gm.designation_id,
-                    c.name AS cadre_name, d.name AS designation_name, gm.is_active
+            'SELECT gm.id, gm.name, gm.is_active
              FROM groups_master gm
-             JOIN cadres c ON c.id = gm.cadre_id
-             JOIN designations d ON d.id = gm.designation_id
-             ORDER BY c.name, d.name, gm.name'
+             ORDER BY gm.name'
         )->fetchAll(),
     ];
 }
@@ -323,22 +324,16 @@ try {
     if ($action === 'group' && in_array($method, ['POST', 'PUT'], true)) {
         require_role($user, ['admin']);
         $data = input();
-        require_fields($data, ['cadre_id', 'designation_id', 'name']);
-
-        $stmt = $pdo->prepare('SELECT id FROM designations WHERE id = ? AND cadre_id = ?');
-        $stmt->execute([(int) $data['designation_id'], (int) $data['cadre_id']]);
-        if (!$stmt->fetch()) {
-            respond(['error' => 'Designation does not belong to selected cadre'], 422);
-        }
+        require_fields($data, ['name']);
 
         if ($method === 'POST') {
-            $stmt = $pdo->prepare('INSERT INTO groups_master (cadre_id, designation_id, name, is_active) VALUES (?, ?, ?, ?)');
-            $stmt->execute([(int) $data['cadre_id'], (int) $data['designation_id'], trim($data['name']), (int) ($data['is_active'] ?? 1)]);
+            $stmt = $pdo->prepare('INSERT INTO groups_master (name, is_active) VALUES (?, ?)');
+            $stmt->execute([trim($data['name']), (int) ($data['is_active'] ?? 1)]);
             respond(['message' => 'Group added'], 201);
         }
         require_fields($data, ['id']);
-        $stmt = $pdo->prepare('UPDATE groups_master SET cadre_id = ?, designation_id = ?, name = ?, is_active = ? WHERE id = ?');
-        $stmt->execute([(int) $data['cadre_id'], (int) $data['designation_id'], trim($data['name']), (int) ($data['is_active'] ?? 1), (int) $data['id']]);
+        $stmt = $pdo->prepare('UPDATE groups_master SET name = ?, is_active = ? WHERE id = ?');
+        $stmt->execute([trim($data['name']), (int) ($data['is_active'] ?? 1), (int) $data['id']]);
         respond(['message' => 'Group updated']);
     }
 
