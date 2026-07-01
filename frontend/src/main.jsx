@@ -157,11 +157,7 @@ function Register({ api, onDone, flash }) {
   const activeDesignations = masters.designations.filter((item) => (
     Number(item.is_active) === 1 && Number(item.cadre_id) === Number(form.cadre_id)
   ));
-  const activeGroups = masters.groups.filter((item) => (
-    Number(item.is_active) === 1 &&
-    Number(item.cadre_id) === Number(form.cadre_id) &&
-    Number(item.designation_id) === Number(form.designation_id)
-  ));
+  const activeGroups = masters.groups.filter((item) => Number(item.is_active) === 1);
 
   function updateForm(patch) {
     setForm((current) => ({ ...current, ...patch }));
@@ -188,19 +184,19 @@ function Register({ api, onDone, flash }) {
         </select>
       </label>
       <label>Cadre
-        <select value={form.cadre_id} onChange={(e) => updateForm({ cadre_id: e.target.value, designation_id: '', group_id: '' })}>
+        <select value={form.cadre_id} onChange={(e) => updateForm({ cadre_id: e.target.value, designation_id: '' })}>
           <option value="">Select cadre</option>
           {activeCadres.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
       <label>Designation
-        <select value={form.designation_id} onChange={(e) => updateForm({ designation_id: e.target.value, group_id: '' })} disabled={!form.cadre_id}>
+        <select value={form.designation_id} onChange={(e) => updateForm({ designation_id: e.target.value })} disabled={!form.cadre_id}>
           <option value="">Select designation</option>
           {activeDesignations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
       </label>
       <label>Group
-        <select value={form.group_id} onChange={(e) => updateForm({ group_id: e.target.value })} disabled={!form.designation_id}>
+        <select value={form.group_id} onChange={(e) => updateForm({ group_id: e.target.value })}>
           <option value="">Select group</option>
           {activeGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
@@ -458,7 +454,7 @@ function Profile({ api, user, setUser, flash }) {
     mobile_no: user.mobile_no || '',
     telephone_no: user.telephone_no || '',
   });
-  const [passwords, setPasswords] = useState({ current_password: '', new_password: '' });
+  const [passwords, setPasswords] = useState({ current_password: '', new_password: '', confirm_new_password: '' });
 
   useEffect(() => {
     api('masters')
@@ -470,11 +466,7 @@ function Profile({ api, user, setUser, flash }) {
   const activeDesignations = masters.designations.filter((item) => (
     Number(item.is_active) === 1 && Number(item.cadre_id) === Number(profile.cadre_id)
   ));
-  const activeGroups = masters.groups.filter((item) => (
-    Number(item.is_active) === 1 &&
-    Number(item.cadre_id) === Number(profile.cadre_id) &&
-    Number(item.designation_id) === Number(profile.designation_id)
-  ));
+  const activeGroups = masters.groups.filter((item) => Number(item.is_active) === 1);
 
   function updateProfile(patch) {
     setProfile((current) => ({ ...current, ...patch }));
@@ -507,19 +499,19 @@ function Profile({ api, user, setUser, flash }) {
             </select>
           </label>
           <label>Cadre
-            <select value={profile.cadre_id} onChange={(e) => updateProfile({ cadre_id: e.target.value, designation_id: '', group_id: '' })}>
+            <select value={profile.cadre_id} onChange={(e) => updateProfile({ cadre_id: e.target.value, designation_id: '' })}>
               <option value="">Select cadre</option>
               {activeCadres.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label>Designation
-            <select value={profile.designation_id} onChange={(e) => updateProfile({ designation_id: e.target.value, group_id: '' })} disabled={!profile.cadre_id}>
+            <select value={profile.designation_id} onChange={(e) => updateProfile({ designation_id: e.target.value })} disabled={!profile.cadre_id}>
               <option value="">Select designation</option>
               {activeDesignations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
           </label>
           <label>Group
-            <select value={profile.group_id} onChange={(e) => updateProfile({ group_id: e.target.value })} disabled={!profile.designation_id}>
+            <select value={profile.group_id} onChange={(e) => updateProfile({ group_id: e.target.value })}>
               <option value="">Select group</option>
               {activeGroups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
             </select>
@@ -531,9 +523,13 @@ function Profile({ api, user, setUser, flash }) {
         </form>
         <form className="panel form-grid password-panel" onSubmit={async (event) => {
           event.preventDefault();
+          if (passwords.new_password !== passwords.confirm_new_password) {
+            flash('New password and confirm new password do not match.');
+            return;
+          }
           try {
             await api('password', { method: 'PUT', body: passwords });
-            setPasswords({ current_password: '', new_password: '' });
+            setPasswords({ current_password: '', new_password: '', confirm_new_password: '' });
             flash('Password updated');
           } catch (error) {
             flash(error.message);
@@ -542,6 +538,7 @@ function Profile({ api, user, setUser, flash }) {
           <h3>Change Password</h3>
           <label>Current Password<input type="password" value={passwords.current_password} onChange={(e) => setPasswords({ ...passwords, current_password: e.target.value })} /></label>
           <label>New Password<input type="password" value={passwords.new_password} onChange={(e) => setPasswords({ ...passwords, new_password: e.target.value })} /></label>
+          <label>Confirm New Password<input type="password" value={passwords.confirm_new_password} onChange={(e) => setPasswords({ ...passwords, confirm_new_password: e.target.value })} /></label>
           <button type="submit">Update Password</button>
         </form>
       </section>
@@ -675,7 +672,7 @@ function AdminPanel({ api, flash }) {
 function MasterConfig({ api, flash }) {
   const emptyCadre = { id: '', name: '', is_active: 1 };
   const emptyDesignation = { id: '', cadre_id: '', name: '', is_active: 1 };
-  const emptyGroup = { id: '', cadre_id: '', designation_id: '', name: '', is_active: 1 };
+  const emptyGroup = { id: '', name: '', is_active: 1 };
   const [masters, setMasters] = useState({ cadres: [], designations: [], groups: [] });
   const [cadreForm, setCadreForm] = useState(emptyCadre);
   const [designationForm, setDesignationForm] = useState(emptyDesignation);
@@ -686,10 +683,6 @@ function MasterConfig({ api, flash }) {
   }
 
   useEffect(() => { load().catch((error) => flash(error.message)); }, []);
-
-  const groupDesignations = masters.designations.filter((item) => (
-    Number(item.cadre_id) === Number(groupForm.cadre_id)
-  ));
 
   async function saveMaster(event, type, form, reset) {
     event.preventDefault();
@@ -706,7 +699,7 @@ function MasterConfig({ api, flash }) {
 
   return (
     <>
-      <Header title="Master Configuration" subtitle="Admin can add or modify cadre, designation, and group mappings." />
+      <Header title="Master Configuration" subtitle="Admin can add or modify cadre, designation, and independent group records." />
       <section className="master-grid">
         <form className="panel form-grid" onSubmit={(event) => saveMaster(event, 'cadre', cadreForm, () => setCadreForm(emptyCadre))}>
           <h3>{cadreForm.id ? 'Modify Cadre' : 'Add Cadre'}</h3>
@@ -746,18 +739,6 @@ function MasterConfig({ api, flash }) {
 
         <form className="panel form-grid" onSubmit={(event) => saveMaster(event, 'group', groupForm, () => setGroupForm(emptyGroup))}>
           <h3>{groupForm.id ? 'Modify Group' : 'Add Group'}</h3>
-          <label>Cadre
-            <select value={groupForm.cadre_id} onChange={(e) => setGroupForm({ ...groupForm, cadre_id: e.target.value, designation_id: '' })}>
-              <option value="">Select cadre</option>
-              {masters.cadres.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
-          <label>Designation
-            <select value={groupForm.designation_id} onChange={(e) => setGroupForm({ ...groupForm, designation_id: e.target.value })} disabled={!groupForm.cadre_id}>
-              <option value="">Select designation</option>
-              {groupDesignations.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
-          </label>
           <label>Group Name<input value={groupForm.name} onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })} /></label>
           <label>Status
             <select value={groupForm.is_active} onChange={(e) => setGroupForm({ ...groupForm, is_active: Number(e.target.value) })}>
@@ -798,14 +779,12 @@ function MasterConfig({ api, flash }) {
         />
         <MasterTable
           title="Groups"
-          columns={['Cadre', 'Designation', 'Group', 'Status']}
+          columns={['Group', 'Status']}
           rows={masters.groups.map((item) => ({
             id: item.id,
-            values: [item.cadre_name, item.designation_name, item.name, statusText(item.is_active)],
+            values: [item.name, statusText(item.is_active)],
             onEdit: () => setGroupForm({
               id: item.id,
-              cadre_id: item.cadre_id,
-              designation_id: item.designation_id,
               name: item.name,
               is_active: Number(item.is_active),
             }),
